@@ -1,0 +1,226 @@
+---
+title: "La ZFE de Strasbourg a-t-elle fait baisser le NO₂ ?"
+subtitle: "Évaluation de l'interdiction des véhicules Crit'Air 5 par différence de différences, 2017-2024"
+author: "Djime Mounsif"
+date: "2026-10-22"
+date-format: "D MMMM YYYY"
+lang: fr
+format:
+  html:
+    toc: true
+    toc-location: left
+    toc-title: "Sommaire"
+    number-sections: true
+    embed-resources: true
+    theme: cosmo
+    fig-align: center
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: chargement
+library(readr)
+library(dplyr)
+library(knitr)
+
+tab <- "sorties/tableaux"
+pct <- function(x) 100 * (exp(x) - 1)
+nb  <- function(x, d = 1) formatC(x, format = "f", digits = d, decimal.mark = ",", big.mark = " ")
+sg  <- function(x, d = 1) paste0(ifelse(x > 0, "+", ""), nb(x, d), " %")
+
+pr  <- read_csv(file.path(tab, "resultat_principal.csv"), show_col_types = FALSE)
+es  <- read_csv(file.path(tab, "event_study.csv"), show_col_types = FALSE)
+pl  <- read_csv(file.path(tab, "placebos.csv"), show_col_types = FALSE)
+rob <- read_csv(file.path(tab, "robustesse.csv"), show_col_types = FALSE)
+
+effet  <- pr$effet_c5
+p_pl   <- mean(abs(c(pl$effet, effet)) >= abs(effet))
+mde    <- 2.8 * sd(pl$effet)
+es_pct <- function(a) pct(es$coef[es$annee == a])
+r_pct  <- function(t) rob$effet_c5_pct[rob$test == t]
+```
+
+::: {.callout-note appearance="simple"}
+## En bref
+
+L'interdiction des véhicules Crit'Air 5 et non classés, le 1er janvier 2023, **n'est pas associée à une baisse supplémentaire du NO₂ à Strasbourg** par rapport à Metz, Nancy et Mulhouse. Strasbourg décroche par rapport aux villes témoins **dès la fin de 2021**, avant l'entrée en vigueur de la ZFE, avec un creux en 2022 (`r sg(es_pct(2022))` par rapport à 2019), puis l'écart se réduit en partie.
+
+Effet propre de l'interdiction des Crit'Air 5 : **`r sg(pct(effet))`** (p-valeur placebo `r nb(p_pl, 3)`, effet minimum détectable `r nb(pct(mde))` %). L'hypothèse d'une baisse n'est pas soutenue.
+:::
+
+# Question
+
+La zone à faibles émissions (ZFE) de l'Eurométropole de Strasbourg est entrée en vigueur le 1er janvier 2022 avec une année pédagogique, sans sanction. Le 1er janvier 2023, les véhicules Crit'Air 5 et non classés y ont été interdits, puis les Crit'Air 4 en 2024.
+
+**Question principale :** l'interdiction des Crit'Air 5 est-elle associée à une baisse du dioxyde d'azote (NO₂) à Strasbourg, par rapport à l'année pédagogique qui la précède, une fois retirées la tendance commune à des villes comparables sans ZFE et l'influence de la météo ?
+
+Trois hypothèses ont été fixées avant toute estimation, dans un [plan d'analyse pré-enregistré](PLAN_ANALYSE.md) :
+
+- **H1** : l'effet propre de l'interdiction des Crit'Air 5 est négatif ;
+- **H2** : il est plus marqué sur les stations trafic que sur les stations de fond ;
+- **H3** (complément) : l'interdiction des Crit'Air 4 en 2024 ajoute une baisse.
+
+Le NO₂ est retenu parce qu'il provient surtout du trafic routier, en particulier des moteurs diesel anciens que vise la ZFE.
+
+# Données
+
+| Données | Source | Détail |
+|---|---|---|
+| NO₂ et NO | Agence européenne pour l'environnement (EEA) | Mesures horaires validées (E1a), 2017-2024 |
+| Type et position des stations | EEA, métadonnées des points de mesure | Trafic, fond urbain ou industrielle |
+| Météo | Météo-France, données climatologiques quotidiennes | Vent moyen, température moyenne, pluie |
+
+Les mesures horaires sont ramenées à des moyennes journalières, calculées seulement quand au moins 18 heures sur 24 sont valides. Aucune valeur manquante n'est imputée.
+
+**Villes et stations.** Strasbourg est la ville traitée. Metz, Nancy et Mulhouse servent de témoins : d'après les informations publiques consultées, elles n'appliquaient pas de restriction de circulation permanente sur la période (Nancy a commencé en 2025), ont le même climat continental et sont mesurées par le même organisme, ATMO Grand Est. Seules les 11 stations actives sur toute la période sont retenues :
+
+| Ville | Rôle | Stations trafic | Stations de fond |
+|---|---|---|---|
+| Strasbourg | Traitée | FR16034 | FR16029 |
+| Metz | Témoin | FR01064 | FR01011, FR01012 |
+| Nancy | Témoin | FR30016, FR30036 | FR30034 |
+| Mulhouse | Témoin | FR16069 | FR16057, FR16066 |
+
+**Échantillon final :** `r nb(pr$n, 0)` observations station × jour, après exclusion de la période Covid (mars 2020 à juin 2021) et de zones tampons autour de chaque changement de règle.
+
+# Méthode
+
+## Phases
+
+| Période | Phase |
+|---|---|
+| janvier 2017 - février 2020, juillet - novembre 2021 | P0 : référence |
+| février - mi-décembre 2022 | P1 : ZFE en vigueur, année pédagogique |
+| mi-janvier - mi-décembre 2023 | P2 : interdiction des Crit'Air 5 |
+| mi-janvier - décembre 2024 | P3 : interdiction des Crit'Air 4 |
+
+Sont exclus : la période Covid, décembre 2021 - janvier 2022 (ouverture du Grand Contournement Ouest le 17 décembre 2021 et entrée en vigueur de la ZFE), et les fêtes de fin d'année autour de chaque rupture.
+
+## Modèle
+
+Le modèle principal est une différence de différences à trois phases, estimée sur données journalières :
+
+$$
+\log(NO_{2,st}) = \beta_1 (S_s \times P1_t) + \beta_2 (S_s \times P2_t) + \beta_3 (S_s \times P3_t) + \gamma' X_{ct} + \alpha_s + \delta_t + \varepsilon_{st}
+$$
+
+où $s$ est la station, $t$ le jour, $S_s$ vaut 1 pour Strasbourg, $X_{ct}$ regroupe le vent, la température et la pluie de la ville, $\alpha_s$ et $\delta_t$ sont des effets fixes station et date.
+
+- L'effet fixe **date** retire tout ce qui touche les quatre villes le même jour : jour de la semaine, jours fériés, prix du carburant, météo régionale.
+- **L'effet propre de l'interdiction des Crit'Air 5 est β₂ − β₁** : le changement de l'écart entre Strasbourg et les témoins entre 2022 et 2023.
+- β₁ n'est pas interprété comme un effet de la ZFE : il mélange l'année pédagogique et l'ouverture du contournement autoroutier, 15 jours plus tôt.
+
+## Inférence
+
+Avec une seule ville traitée, les écarts-types classiques sont fragiles. L'inférence principale repose donc sur des **placebos dans le temps** : on refait l'estimation avec 13 fausses dates de rupture entre janvier 2018 et janvier 2019, quand aucune ZFE n'existait. La distribution de ces faux effets mesure la variabilité naturelle de l'écart entre Strasbourg et les témoins. On en tire une p-valeur placebo et un effet minimum détectable (2,8 fois l'écart-type des placebos).
+
+Les règles d'interprétation ont été fixées avant les estimations : un effet est considéré comme mis en évidence si la p-valeur placebo est inférieure ou égale à 0,10 et si l'effet dépasse l'effet minimum détectable.
+
+Les estimations sont réalisées en R avec le package `fixest`.
+
+# Résultats
+
+## Les données brutes
+
+![NO₂ mensuel moyen, Strasbourg et villes témoins, par type de station.](figures/fig1_no2_mensuel.png){#fig-brut}
+
+Le NO₂ baisse partout entre 2017 et 2024. Sur les stations de fond, Strasbourg et les villes témoins évoluent presque à l'identique. Sur les stations trafic, Strasbourg reste au-dessus des témoins, mais l'écart se resserre nettement après la période Covid.
+
+À Strasbourg, le NO₂ moyen baisse de **`r sg(pr$naif_pct)`** entre 2022 et 2023. Ce chiffre ne mesure pas l'effet de l'interdiction : il mélange l'effet de la ZFE et la baisse générale de la pollution.
+
+## Modèle principal
+
+```{r}
+#| label: tbl-principal
+#| tbl-cap: "Modèle principal : écart de NO₂ entre Strasbourg et les villes témoins, par phase (référence P0)."
+ic <- function(e, s) paste0("[", nb(pct(e - 1.96 * s)), " ; ", nb(pct(e + 1.96 * s)), "]")
+tibble(
+  Mesure = c("Avant/après naïf à Strasbourg (2022 → 2023)",
+             "β₁ : année pédagogique 2022",
+             "β₂ : interdiction des Crit'Air 5, 2023",
+             "β₃ : interdiction des Crit'Air 4, 2024",
+             "**β₂ − β₁ : effet propre des Crit'Air 5**",
+             "β₃ − β₂ : effet propre des Crit'Air 4"),
+  `Effet (%)` = c(sg(pr$naif_pct), sg(pct(pr$beta1)), sg(pct(pr$beta2)), sg(pct(pr$beta3)),
+                  paste0("**", sg(pct(pr$effet_c5)), "**"), sg(pct(pr$effet_c4))),
+  `IC 95 % indicatif` = c("—", "—", "—", "—", ic(pr$effet_c5, pr$se_c5), ic(pr$effet_c4, pr$se_c4))
+) |> kable(align = c("l", "r", "r"))
+```
+
+Par rapport à 2022, l'écart entre Strasbourg et les témoins **augmente** de `r sg(pct(effet))` en 2023 : Strasbourg baisse moins que les villes témoins. L'intervalle de confiance classique contient zéro. L'interdiction des Crit'Air 4 n'ajoute pas de baisse non plus (`r sg(pct(pr$effet_c4))`).
+
+## Event study
+
+![Écart de NO₂ entre Strasbourg et les villes témoins, année par année, par rapport à 2019.](figures/fig2_event_study.png){#fig-es}
+
+L'event study explique le signe positif :
+
+- **Avant 2020, les tendances sont parallèles** : `r sg(es_pct(2017))` en 2017 et `r sg(es_pct(2018))` en 2018, sous l'effet minimum détectable, comme l'exige le plan.
+- **Strasbourg décroche dès juillet-novembre 2021** (`r sg(es_pct(2021))`), avant l'entrée en vigueur de la ZFE et avant l'ouverture du contournement.
+- Le creux est atteint en **2022** (`r sg(es_pct(2022))`), puis l'écart se réduit en 2023 (`r sg(es_pct(2023))`) et en 2024 (`r sg(es_pct(2024))`).
+
+Le saut positif entre 2022 et 2023 ne signifie donc pas que l'interdiction a fait monter la pollution : 2022 a été une année exceptionnellement basse pour Strasbourg par rapport aux témoins, et 2023 revient vers la tendance.
+
+## Placebos
+
+![Effet estimé comparé aux 13 fausses ruptures de 2018-2019.](figures/fig3_placebos.png){#fig-placebos}
+
+Les 13 effets placebo sont compris entre `r sg(pct(min(pl$effet)))` et `r sg(pct(max(pl$effet)))`. L'effet réel, `r sg(pct(effet))`, est plus grand que tous en valeur absolue : la p-valeur placebo vaut `r nb(p_pl, 3)`, la plus petite possible avec 13 placebos. Il dépasse l'effet minimum détectable (`r nb(pct(mde))` %).
+
+**Selon les règles du plan, l'effet est donc mis en évidence, mais dans le sens d'une hausse relative : H1 n'est pas soutenue.**
+
+# Robustesse
+
+![Effet propre de l'interdiction des Crit'Air 5 selon les tests de robustesse.](figures/fig4_robustesse.png){#fig-rob}
+
+```{r}
+#| label: tbl-robustesse
+#| tbl-cap: "Tests de robustesse prévus dans le plan d'analyse (β₂ − β₁, en %)."
+rob |>
+  transmute(
+    Test = test,
+    `Effet (%)` = sg(effet_c5_pct),
+    `IC 95 % indicatif` = ifelse(is.na(ic95_bas_pct), "—",
+                                 paste0("[", nb(ic95_bas_pct), " ; ", nb(ic95_haut_pct), "]")),
+    Observations = ifelse(is.na(n), "—", nb(n, 0))
+  ) |>
+  kable(align = c("l", "r", "r", "r"))
+```
+
+- **Le signe est positif dans tous les tests qui portent sur le NO₂ (R1, R2, R3, R5, R6, R8)**, de `r sg(r_pct("R2 sans Metz"))` sans Metz à `r sg(r_pct("R2 sans Nancy"))` sans Nancy. Le résultat ne dépend ni d'une ville témoin, ni des contrôles météo, ni de la fréquence des données.
+- **H2 n'est pas soutenue** : l'effet est du même ordre sur les stations trafic (`r sg(r_pct("R1 stations trafic"))`) et sur les stations de fond (`r sg(r_pct("R1 stations de fond"))`).
+- **Le NO** donne `r sg(r_pct("R4 NO"))`, avec un intervalle très large : 10 % des jours manquent pour ce polluant, 34 % à la station de fond de Strasbourg.
+- **Les placebos au 1er janvier 2018 et 2019** sont faibles (`r sg(r_pct("R7 placebo 2018-01-01"))` et `r sg(r_pct("R7 placebo 2019-01-01"))`) : la date du 1er janvier ne crée pas d'effet par elle-même.
+
+# Limites
+
+- **Une seule ville traitée**, et seulement deux stations à Strasbourg actives sur toute la période. Le résultat est celui d'une étude de cas, pas une évaluation générale des ZFE.
+- **Les placebos ne sont pas centrés sur zéro** (moyenne `r sg(pct(mean(pl$effet)))`) : Strasbourg baissait déjà un peu plus vite que les témoins en 2017-2019. Ils se chevauchent aussi, ce qui sous-estime leur dispersion : l'effet minimum détectable est sans doute optimiste.
+- **Le décrochage de 2021 n'est pas expliqué.** L'année 2021 ne couvre que juillet à novembre ; une différence de saisonnalité entre Strasbourg et les témoins pourrait jouer. D'autres changements propres à Strasbourg (report du trafic lié au contournement, tram, plan vélo, chantiers) ne sont pas isolés.
+- **Les phases sont courtes** : environ dix mois et demi chacune, soit un seul cycle saisonnier par phase.
+- **L'intensité réelle des contrôles est inconnue**, et trois dates restent à confirmer dans les arrêtés : le début des amendes pour les Crit'Air 5, l'interdiction des Crit'Air 4 et celle des poids lourds en transit sur l'A35.
+- **Les vieux véhicules ont pu se reporter** vers la périphérie, hors des stations de mesure.
+
+# Écarts au plan
+
+| Écart | Raison |
+|---|---|
+| Moyennes annuelles de NO₂ par station calculées avant la rédaction du plan | Contrôle de la qualité des données ; aucune estimation ni aucun graphique produit |
+| Coefficient ajouté pour 2020 (janvier-février) dans l'event study | Ces deux mois appartiennent à la période de référence ; sans coefficient propre, ils auraient été comptés avec l'année de référence 2019 |
+| Zone tampon des placebos fixée à 15 jours de part et d'autre de chaque fausse date | Le plan décrivait la zone tampon pour une rupture au 1er janvier ; même règle appliquée aux autres dates, comme pour la vraie rupture |
+| Test R9 (rupture à la date de verbalisation) non réalisé | La date de début des amendes pour les Crit'Air 5 n'est pas encore confirmée |
+| Graphiques produits en Python (`figures/creer_figures.py`) | Mêmes données et même modèle ; les estimations de référence sont celles de `R/03_estimation.R` |
+
+# Conclusion
+
+L'interdiction des Crit'Air 5 en 2023 n'est pas associée à une baisse supplémentaire du NO₂ à Strasbourg par rapport aux villes témoins. Le fait marquant est ailleurs : Strasbourg décroche dès la fin de 2021, avant l'entrée en vigueur de la ZFE, atteint un creux en 2022, puis l'écart se réduit en partie. Identifier la cause de ce décrochage demande une analyse complémentaire, qui n'était pas prévue dans le plan.
+
+# Reproduire l'analyse
+
+1. `collecte/` : scripts Python de téléchargement (API de l'EEA, Météo-France) et de construction de `data/clean/base_zfe_station_jour.csv`.
+2. `R/02_import_nettoyage.R` : contrôles et préparation de la base d'analyse.
+3. `R/03_estimation.R` : modèle principal, event study, placebos, robustesse ; écrit les tableaux dans `sorties/tableaux/`.
+4. `quarto render` : produit ce rapport dans `docs/`.
