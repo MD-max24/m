@@ -57,7 +57,7 @@ Dans les scripts R, la variable `racine` indique le dossier du projet : adaptez-
 
 ## Limites principales
 
-Une seule ville traitée et deux stations à Strasbourg actives sur toute la période ; décrochage de 2021 non expliqué ; placebos non centrés sur zéro ; dates de verbalisation à confirmer. Détail dans le rapport.
+Une seule ville traitée et deux stations à Strasbourg actives sur toute la période ; décrochage de 2021 non expliqué ; placebos non centrés sur zéro. Détail dans le rapport.
 
 ---
 
