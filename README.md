@@ -61,4 +61,4 @@ Une seule ville traitée et deux stations à Strasbourg actives sur toute la pé
 
 ---
 
-Projet réalisé par Djime Mounsif, M2 Statistique et Économétrie, Université de Strasbourg. Réalisé avec l'aide d'un assistant IA (Claude) pour la collecte, le code et la relecture.
+Projet réalisé par Djime Mounsif, M2 Statistique et Économétrie, Université de Strasbourg. Réalisé avec l'aide d'un assistant IA, le code et la relecture.
